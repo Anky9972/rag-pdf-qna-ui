@@ -262,32 +262,6 @@ NODE_ENV=production
 
 ---
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### **Development Setup**
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes and test thoroughly
-4. Commit with conventional commits: `git commit -m 'feat: add amazing feature'`
-5. Push to your branch: `git push origin feature/amazing-feature`
-6. Open a Pull Request
-
-### **Code Standards**
-- **TypeScript**: Strict mode enabled
-- **ESLint**: Follow the configured rules
-- **Prettier**: Automatic code formatting
-- **Conventional Commits**: Use semantic commit messages
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
 ## 🙏 Acknowledgments
 
 - **[Next.js](https://nextjs.org/)** - The React framework for production
@@ -298,14 +272,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 📞 Support
-
-- **📧 Email**: support@pdfqna.com
-- **💬 Discord**: [Join our community](https://discord.gg/pdfqna)
-- **🐛 Issues**: [GitHub Issues](https://github.com/your-username/rag-pdf-qna-ui/issues)
-- **📖 Docs**: [Full Documentation](https://docs.pdfqna.com)
-
----
 
 <div align="center">
 
