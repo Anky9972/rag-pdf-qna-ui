@@ -18,10 +18,9 @@ import {
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
-  Area,
   AreaChart,
+  Area,
+  Legend,
 } from "recharts";
 import { 
   TrendingUp, 
@@ -39,10 +38,12 @@ import {
   Download,
   Eye,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  AlertCircle,
+  BarChart3
 } from "lucide-react";
 
-// Define the actual data structure from your API
+// Type definitions
 type UserAnalytics = {
   total_queries: number;
   total_documents: number;
@@ -58,7 +59,20 @@ type AnalyticsDashboard = {
   last_updated: string;
 };
 
-// Enhanced color palette for charts using our new theme
+type TrendDataPoint = {
+  date: string;
+  day: string;
+  queries: number;
+  documents: number;
+  cost: number;
+};
+
+type TrendsResponse = {
+  trends: TrendDataPoint[];
+  period_days: number;
+};
+
+// Enhanced color palette
 const CHART_COLORS = [
   'oklch(0.55 0.25 285)', // primary
   'oklch(0.72 0.15 15)',  // accent
@@ -81,6 +95,7 @@ export function AnalyticsDashboard() {
   const [timeRange, setTimeRange] = useState("7");
   const router = useRouter();
 
+  // Unified fetcher with error handling
   const fetcher = async (url: string) => {
     if (!user) {
       throw new Error("Not authenticated - no active session");
@@ -92,36 +107,68 @@ export function AnalyticsDashboard() {
     });
     
     if (!response.ok) {
-      const errorText = await response.text();
       if (response.status === 401) {
-        console.warn("🔒 401 Unauthorized - attempting logout and redirect");
+        console.warn("🔒 401 Unauthorized - session expired");
         await logout();
         router.push("/login");
-        throw new Error("Session expired. Redirecting to login.");
+        throw new Error("Session expired. Please log in again.");
       }
+      
+      const errorText = await response.text();
+      let errorMessage = `HTTP ${response.status}`;
       
       try {
         const errorData = JSON.parse(errorText);
-        throw new Error(errorData?.detail || `HTTP ${response.status}: ${errorText || response.statusText}`);
-      } catch (parseError) {
-        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+        errorMessage = errorData?.detail || errorMessage;
+      } catch {
+        errorMessage = errorText || response.statusText;
       }
+      
+      throw new Error(errorMessage);
     }
     
     return response.json();
   };
 
-  const { data: analytics, isLoading, error, mutate } = useSWR<AnalyticsDashboard>(
+  // Fetch analytics data
+  const { 
+    data: analytics, 
+    isLoading: analyticsLoading, 
+    error: analyticsError, 
+    mutate: mutateAnalytics 
+  } = useSWR<AnalyticsDashboard>(
     user ? `/api/analytics/dashboard?days=${timeRange}` : null,
     fetcher,
     {
       refreshInterval: 30000,
       revalidateOnFocus: true,
       onError: (error) => {
-        console.error("AnalyticsDashboard SWR Error:", error);
+        console.error("Analytics fetch error:", error);
       }
     }
   );
+
+  // Fetch trends data
+  const { 
+    data: trendsResponse, 
+    isLoading: trendsLoading, 
+    error: trendsError,
+    mutate: mutateTrends
+  } = useSWR<TrendsResponse>(
+    user ? `/api/analytics/trends?days=${timeRange}` : null,
+    fetcher,
+    {
+      refreshInterval: 30000,
+      revalidateOnFocus: true,
+      onError: (error) => {
+        console.error("Trends fetch error:", error);
+      }
+    }
+  );
+
+  const isLoading = analyticsLoading || trendsLoading;
+  const error = analyticsError || trendsError;
+  const trendData = trendsResponse?.trends || [];
 
   // Transform provider usage data for pie chart
   const providerData = analytics?.user_analytics?.provider_usage 
@@ -131,22 +178,58 @@ export function AnalyticsDashboard() {
       }))
     : [];
 
-  // Transform popular queries for bar chart
-  const queryData = analytics?.user_analytics?.popular_queries?.slice(0, 5).map((query, index) => ({
-    query: query.length > 25 ? `${query.substring(0, 25)}...` : query,
-    count: analytics.user_analytics.total_queries - index,
-  })) || [];
+  // Calculate trend changes (comparing first half vs second half of period)
+  const calculateTrend = (data: TrendDataPoint[], key: 'queries' | 'documents' | 'cost') => {
+    if (data.length < 2) return { change: "0.0%", trend: "neutral" as const };
+    
+    const midpoint = Math.floor(data.length / 2);
+    const firstHalf = data.slice(0, midpoint);
+    const secondHalf = data.slice(midpoint);
+    
+    const firstAvg = firstHalf.reduce((sum, d) => sum + d[key], 0) / firstHalf.length;
+    const secondAvg = secondHalf.reduce((sum, d) => sum + d[key], 0) / secondHalf.length;
+    
+    if (firstAvg === 0) return { change: "N/A", trend: "neutral" as const };
+    
+    const percentChange = ((secondAvg - firstAvg) / firstAvg) * 100;
+    const trend = key === 'cost' 
+      ? (percentChange > 0 ? "up" : percentChange < 0 ? "down" : "neutral")
+      : (percentChange > 0 ? "up" : percentChange < 0 ? "down" : "neutral");
+    
+    return {
+      change: `${percentChange > 0 ? '+' : ''}${percentChange.toFixed(1)}%`,
+      trend
+    };
+  };
 
-  // Mock trend data for area chart
-  const trendData = Array.from({ length: 7 }, (_, i) => ({
-    day: `Day ${i + 1}`,
-    queries: Math.floor(Math.random() * 100) + 20,
-    documents: Math.floor(Math.random() * 20) + 5,
-    cost: (Math.random() * 0.5 + 0.1).toFixed(4),
-  }));
+  const queryTrend = calculateTrend(trendData, 'queries');
+  const documentTrend = calculateTrend(trendData, 'documents');
+  const costTrend = calculateTrend(trendData, 'cost');
 
   const handleRefresh = () => {
-    mutate();
+    mutateAnalytics();
+    mutateTrends();
+  };
+
+  const handleExport = () => {
+    if (!analytics) return;
+    
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      time_period_days: timeRange,
+      analytics: analytics.user_analytics,
+      trends: trendData
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const formatCurrency = (value: number) => {
@@ -161,6 +244,7 @@ export function AnalyticsDashboard() {
     return `${seconds.toFixed(2)}s`;
   };
 
+  // Loading state
   if (authLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8">
@@ -173,6 +257,7 @@ export function AnalyticsDashboard() {
     );
   }
 
+  // Not authenticated
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
@@ -188,18 +273,26 @@ export function AnalyticsDashboard() {
     );
   }
 
+  // Error state
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
         <div className="w-20 h-20 bg-destructive/10 rounded-2xl flex items-center justify-center mb-6">
-          <Activity className="w-10 h-10 text-destructive" />
+          <AlertCircle className="w-10 h-10 text-destructive" />
         </div>
         <h2 className="text-2xl font-bold mb-2">Failed to Load Analytics</h2>
-        <div className="text-muted-foreground mb-6">{error.message}</div>
-        <Button onClick={handleRefresh} variant="outline" className="px-8 py-3">
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Try Again
-        </Button>
+        <div className="text-muted-foreground mb-6 max-w-md">
+          {error.message || "An unexpected error occurred"}
+        </div>
+        <div className="flex gap-4">
+          <Button onClick={handleRefresh} variant="outline" className="px-8 py-3">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Try Again
+          </Button>
+          <Button onClick={() => router.push("/dashboard")} variant="ghost" className="px-8 py-3">
+            Go to Dashboard
+          </Button>
+        </div>
       </div>
     );
   }
@@ -210,26 +303,26 @@ export function AnalyticsDashboard() {
       value: analytics?.user_analytics?.total_queries ?? 0,
       icon: MessageSquare,
       color: "from-primary to-primary/80",
-      change: "+12.5%",
-      trend: "up"
+      change: queryTrend.change,
+      trend: queryTrend.trend
     },
     {
       title: "Documents",
       value: analytics?.user_analytics?.total_documents ?? 0,
       icon: FileText,
       color: "from-accent-2 to-accent-2/80",
-      change: "+8.2%",
-      trend: "up"
+      change: documentTrend.change,
+      trend: documentTrend.trend
     },
     {
-      title: "Response Time",
+      title: "Avg Response Time",
       value: analytics?.user_analytics?.avg_response_time 
         ? formatTime(analytics.user_analytics.avg_response_time)
         : "0.00s",
       icon: Zap,
       color: "from-accent to-accent/80",
-      change: "-15.3%",
-      trend: "down"
+      change: "N/A",
+      trend: "neutral"
     },
     {
       title: "Total Cost",
@@ -238,8 +331,8 @@ export function AnalyticsDashboard() {
         : "$0.0000",
       icon: DollarSign,
       color: "from-chart-4 to-chart-5",
-      change: "+5.7%",
-      trend: "up"
+      change: costTrend.change,
+      trend: costTrend.trend
     }
   ];
 
@@ -257,7 +350,7 @@ export function AnalyticsDashboard() {
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-accent-2 bg-clip-text text-transparent">
                   Analytics Dashboard
                 </h1>
-                <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
                   <Calendar className="w-4 h-4" />
                   <span>
                     Last updated: {analytics?.last_updated 
@@ -276,11 +369,11 @@ export function AnalyticsDashboard() {
               <select
                 value={timeRange}
                 onChange={(e) => setTimeRange(e.target.value)}
-                className="px-3 py-2 bg-transparent border-0 focus:outline-none focus:ring-0"
+                className="px-3 py-2 bg-transparent border-0 focus:outline-none focus:ring-0 cursor-pointer"
                 disabled={isLoading}
               >
                 {TIME_RANGES.map(range => (
-                  <option key={range.value} value={range.value} className="bg-background text-foreground rounded-2xl">
+                  <option key={range.value} value={range.value} className="bg-background text-foreground">
                     {range.label}
                   </option>
                 ))}
@@ -298,7 +391,13 @@ export function AnalyticsDashboard() {
               Refresh
             </Button>
 
-            <Button variant="outline" size="sm" className="glass hover:text-primary hover:border-primary">
+            <Button 
+              onClick={handleExport}
+              variant="outline" 
+              size="sm" 
+              className="glass hover:text-primary hover:border-primary"
+              disabled={!analytics}
+            >
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
@@ -317,16 +416,17 @@ export function AnalyticsDashboard() {
                   <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
                     <stat.icon className="w-6 h-6 text-white" />
                   </div>
-                  <div className={`flex items-center gap-1 text-sm font-medium ${
-                    stat.trend === 'up' ? 'text-accent-2' : 'text-accent'
-                  }`}>
-                    {stat.trend === 'up' ? (
-                      <ArrowUpRight className="w-4 h-4" />
-                    ) : (
-                      <ArrowDownRight className="w-4 h-4" />
-                    )}
-                    {stat.change}
-                  </div>
+                  {stat.change !== "N/A" && (
+                    <div className={`flex items-center gap-1 text-sm font-medium ${
+                      stat.trend === 'up' ? 'text-accent-2' : 
+                      stat.trend === 'down' ? 'text-accent' : 
+                      'text-muted-foreground'
+                    }`}>
+                      {stat.trend === 'up' && <ArrowUpRight className="w-4 h-4" />}
+                      {stat.trend === 'down' && <ArrowDownRight className="w-4 h-4" />}
+                      {stat.change}
+                    </div>
+                  )}
                 </div>
                 
                 <div>
@@ -353,18 +453,25 @@ export function AnalyticsDashboard() {
                 <TrendingUp className="w-5 h-5 text-primary" />
                 Usage Trends
               </h3>
-              <Button variant="ghost" size="sm" className="text-muted-foreground">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
                 <Eye className="w-4 h-4 mr-2" />
                 View Details
               </Button>
             </div>
-            {isLoading ? (
+            
+            {trendsLoading ? (
               <div className="h-[300px] flex items-center justify-center">
                 <div className="animate-pulse space-y-4 w-full">
                   <div className="h-4 bg-muted rounded w-3/4"></div>
                   <div className="h-4 bg-muted rounded w-1/2"></div>
                   <div className="h-48 bg-muted rounded"></div>
                 </div>
+              </div>
+            ) : trendData.length === 0 ? (
+              <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
+                <BarChart3 className="w-12 h-12 mb-4 opacity-50" />
+                <p className="font-medium">No usage data available</p>
+                <p className="text-sm mt-2">Start querying documents to see trends!</p>
               </div>
             ) : (
               <div className="h-[300px]">
@@ -381,8 +488,15 @@ export function AnalyticsDashboard() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.93 0.01 280)" />
-                    <XAxis dataKey="day" stroke="oklch(0.45 0.02 280)" />
-                    <YAxis stroke="oklch(0.45 0.02 280)" />
+                    <XAxis 
+                      dataKey="day" 
+                      stroke="oklch(0.45 0.02 280)"
+                      style={{ fontSize: '12px' }}
+                    />
+                    <YAxis 
+                      stroke="oklch(0.45 0.02 280)"
+                      style={{ fontSize: '12px' }}
+                    />
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: 'oklch(0.99 0.005 280)', 
@@ -391,6 +505,7 @@ export function AnalyticsDashboard() {
                         boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
                       }} 
                     />
+                    <Legend />
                     <Area 
                       type="monotone" 
                       dataKey="queries" 
@@ -398,6 +513,7 @@ export function AnalyticsDashboard() {
                       fillOpacity={1}
                       fill="url(#queriesGradient)"
                       strokeWidth={3}
+                      name="Queries"
                     />
                     <Area 
                       type="monotone" 
@@ -406,6 +522,7 @@ export function AnalyticsDashboard() {
                       fillOpacity={1}
                       fill="url(#documentsGradient)"
                       strokeWidth={3}
+                      name="Documents"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -421,7 +538,8 @@ export function AnalyticsDashboard() {
                 Providers
               </h3>
             </div>
-            {isLoading ? (
+            
+            {analyticsLoading ? (
               <div className="h-[300px] flex items-center justify-center">
                 <div className="w-32 h-32 border-8 border-muted border-t-primary rounded-full animate-spin"></div>
               </div>
@@ -459,7 +577,8 @@ export function AnalyticsDashboard() {
             ) : (
               <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
                 <Target className="w-12 h-12 mb-4 opacity-50" />
-                <p>No provider usage data</p>
+                <p className="font-medium">No provider data</p>
+                <p className="text-sm mt-2">Make queries to see usage</p>
               </div>
             )}
           </AnimatedCard>
@@ -474,7 +593,7 @@ export function AnalyticsDashboard() {
             </h3>
           </div>
           
-          {isLoading ? (
+          {analyticsLoading ? (
             <div className="space-y-4">
               {[...Array(5)].map((_, i) => (
                 <div key={i} className="animate-pulse flex items-center justify-between p-4 bg-muted/50 rounded-xl">
@@ -490,16 +609,18 @@ export function AnalyticsDashboard() {
                   key={index}
                   className="group flex items-center justify-between p-4 bg-gradient-to-r from-muted/30 to-transparent rounded-xl hover:from-primary/5 hover:to-accent/5 transition-all duration-300"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br flex items-center justify-center text-white text-sm font-semibold`}
-                         style={{ background: `linear-gradient(135deg, ${CHART_COLORS[index % CHART_COLORS.length]}, ${CHART_COLORS[(index + 1) % CHART_COLORS.length]})` }}>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div 
+                      className="w-8 h-8 rounded-lg bg-gradient-to-br flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
+                      style={{ background: `linear-gradient(135deg, ${CHART_COLORS[index % CHART_COLORS.length]}, ${CHART_COLORS[(index + 1) % CHART_COLORS.length]})` }}
+                    >
                       {index + 1}
                     </div>
-                    <span className="text-sm font-medium group-hover:text-primary transition-colors">
+                    <span className="text-sm font-medium group-hover:text-primary transition-colors truncate">
                       {query}
                     </span>
                   </div>
-                  <div className="text-xs text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">
+                  <div className="text-xs text-muted-foreground bg-muted/50 px-3 py-1 rounded-full ml-4 flex-shrink-0">
                     Query #{index + 1}
                   </div>
                 </div>
@@ -508,7 +629,8 @@ export function AnalyticsDashboard() {
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <MessageSquare className="w-12 h-12 mb-4 opacity-50" />
-              <p>No recent queries to display</p>
+              <p className="font-medium">No recent queries</p>
+              <p className="text-sm mt-2">Your query history will appear here</p>
             </div>
           )}
         </AnimatedCard>

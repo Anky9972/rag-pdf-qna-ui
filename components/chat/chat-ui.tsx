@@ -42,7 +42,6 @@ type Message = {
 
 // Enhanced message formatting component
 function FormattedMessage({ content, isStreaming = false }: { content: string; isStreaming?: boolean }) {
-  console.log("Raw content:", content);
   const [displayedContent, setDisplayedContent] = useState(isStreaming ? "" : content);
   const [copied, setCopied] = useState(false);
   const [isValidMarkdown, setIsValidMarkdown] = useState<boolean>(false);
@@ -50,17 +49,16 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
   // Preprocess markdown to handle newlines and table formatting
   const preprocessMarkdown = (text: string) => {
     let processed = text
-      .replace(/\r\n/g, '\n') // Normalize line endings
-      .replace(/\\\n/g, '\n') // Handle escaped newlines
-      .trim(); // Remove leading/trailing whitespace
+      .replace(/\r\n/g, '\n')
+      .replace(/\\\n/g, '\n')
+      .trim();
 
-    // Preserve paragraph breaks and normalize table/list newlines
     processed = processed
-      .replace(/(\n\s*){2,}/g, '\n\n') // Ensure exactly two newlines for paragraphs
-      .replace(/\|[ \t]+/g, '| ') // Normalize spaces after pipes
-      .replace(/[ \t]+\|/g, ' |') // Normalize spaces before pipes
-      .replace(/^\s*\|/gm, '|') // Ensure pipes start at beginning of line
-      .replace(/\|\s*$/gm, '|'); // Ensure pipes end lines properly
+      .replace(/(\n\s*){2,}/g, '\n\n')
+      .replace(/\|[ \t]+/g, '| ')
+      .replace(/[ \t]+\|/g, ' |')
+      .replace(/^\s*\|/gm, '|')
+      .replace(/\|\s*$/gm, '|');
 
     const lines = processed.split('\n');
     const normalizedLines = lines.map((line, index) => {
@@ -85,12 +83,12 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
     }
     
     return (
-      lines.some(line => line.match(/^#{1,6}\s+/)) || // Headers
-      lines.some(line => line.match(/^[-*]\s+/)) || // Unordered lists
-      lines.some(line => line.match(/^\d+\.\s+/)) || // Ordered lists
-      lines.some(line => line.match(/^>\s+/)) || // Blockquotes
-      lines.some(line => line.match(/^```/)) || // Code blocks
-      lines.some(line => line.trim().length > 0) // Non-empty paragraphs
+      lines.some(line => line.match(/^#{1,6}\s+/)) ||
+      lines.some(line => line.match(/^[-*]\s+/)) ||
+      lines.some(line => line.match(/^\d+\.\s+/)) ||
+      lines.some(line => line.match(/^>\s+/)) ||
+      lines.some(line => line.match(/^```/)) ||
+      lines.some(line => line.trim().length > 0)
     );
   };
 
@@ -111,7 +109,7 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
           setIsValidMarkdown(isValidMarkdownStructure(processedContent));
           clearInterval(interval);
         }
-      }, 50); // Slower interval to reduce partial rendering issues
+      }, 50);
       return () => clearInterval(interval);
     } else {
       const processedContent = preprocessMarkdown(content);
@@ -133,7 +131,7 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
 
   return (
     <div className="relative group">
-      <div className="prose prose-sm max-w-none">
+      <div className="prose prose-sm max-w-none break-words">
         {isStreaming && !isValidMarkdown ? (
           <span className="text-sm text-muted-foreground">Generating content...</span>
         ) : (
@@ -141,9 +139,10 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeRaw]}
             components={{
-              // Table and table cells with coloring
               table: ({ node, ...props }) => (
-                <table className="border border-white w-full bg-card/80" {...props} />
+                <div className="overflow-x-auto my-4">
+                  <table className="border border-white w-full bg-card/80 min-w-full" {...props} />
+                </div>
               ),
               th: ({ node, ...props }) => (
                 <th className="border border-white px-4 py-2 text-sm font-medium bg-primary/20 text-primary" {...props} />
@@ -151,7 +150,6 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
               td: ({ node, ...props }) => (
                 <td className="border border-white px-4 py-2 text-sm text-foreground" {...props} />
               ),
-              // Headings with color emphasis
               h1: ({ node, ...props }) => (
                 <h1 className="text-2xl font-bold text-primary mt-6 mb-3" {...props} />
               ),
@@ -161,12 +159,10 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
               h3: ({ node, ...props }) => (
                 <h3 className="text-lg font-medium text-accent-2 mt-4 mb-2" {...props} />
               ),
-              // Paragraphs with subtle highlight for key terms
               p: ({ node, ...props }) => {
                 const children = React.Children.toArray(props.children);
                 const enhancedChildren = children.map((child, index) => {
                   if (typeof child === 'string') {
-                    // Highlight key terms (e.g., "Confidential Information", "Accenture", "Recipient")
                     const highlighted = child.replace(
                       /\b(Confidential Information|Accenture|Recipient)\b/g,
                       '<span class="text-primary font-semibold">$1</span>'
@@ -177,7 +173,6 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
                 });
                 return <p className="text-sm leading-relaxed mb-4 text-foreground" {...props}>{enhancedChildren}</p>;
               },
-              // Lists with colored bullets
               ul: ({ node, ...props }) => (
                 <ul className="list-disc list-inside space-y-2 my-4 pl-4 text-foreground" style={{ color: 'var(--color-primary)' }} {...props} />
               ),
@@ -187,7 +182,6 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
               li: ({ node, ...props }) => (
                 <li className="text-sm leading-relaxed" {...props} />
               ),
-              // Code blocks with background color
               code: ({ node, inline, ...props }) => (
                 inline ? (
                   <code className="bg-muted/50 text-accent rounded px-1 py-0.5" {...props} />
@@ -197,11 +191,9 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
                   </pre>
                 )
               ),
-              // Blockquotes with color
               blockquote: ({ node, ...props }) => (
                 <blockquote className="border-l-4 border-accent/50 pl-4 italic text-muted-foreground my-4" {...props} />
               ),
-              // Strong (bold) text with color
               strong: ({ node, ...props }) => (
                 <strong className="text-accent-2 font-bold" {...props} />
               ),
@@ -225,6 +217,7 @@ function FormattedMessage({ content, isStreaming = false }: { content: string; i
     </div>
   );
 }
+
 export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
   const { toast } = useToast();
   const { user, isLoading: authLoading, isInitialized } = useAuth();
@@ -252,7 +245,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
     try {
       const response = await fetch(url, {
         method: 'GET',
-        credentials: "include", // Send httpOnly cookie
+        credentials: "include",
       });
       
       if (!response.ok) {
@@ -327,7 +320,6 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
     }
     
     try {
-      // Truncate query to 100 characters for title
       const title = userQuery.length > 100 ? userQuery.substring(0, 97) + '...' : userQuery;
       
       const res = await fetch("/api/conversations/", {
@@ -337,9 +329,9 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
         },
         body: JSON.stringify({ 
           document_id: pdfId,
-          title // Include title in the request
+          title
         }),
-        credentials: "include", // Send httpOnly cookie
+        credentials: "include",
       });
       
       if (!res.ok) {
@@ -383,7 +375,6 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
     try {
       const convId = await ensureConversation(userMessage);
       
-      // Add optimistic user message
       if (!conversationId) {
         setLocalMessages((m) => [...m, { 
           id: tempMessageId,
@@ -392,7 +383,6 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
           isOptimistic: true 
         }]);
         
-        // Add streaming assistant message placeholder
         assistantMessageId = `assistant-${Date.now()}`;
         setLocalMessages((m) => [...m, { 
           id: assistantMessageId,
@@ -418,7 +408,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(queryPayload),
-        credentials: "include", // Send httpOnly cookie
+        credentials: "include",
       });
       
       if (!res.ok) {
@@ -436,15 +426,12 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
       setInput("");
       setConversationId(data.conversation_id || convId);
       
-      // Switch to conversations tab to show the new conversation
       setActiveTab('conversations');
       
-      // Force refresh messages after setting conversationId
       if (data.conversation_id || convId) {
         await refreshMessages();
       }
       
-      // Update localMessages if no conversationId existed initially
       if (!conversationId && assistantMessageId) {
         setLocalMessages((m) => m.map(msg => 
           msg.id === assistantMessageId 
@@ -452,7 +439,6 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
             : msg
         ));
         
-        // Stop streaming after a delay
         setTimeout(() => {
           setLocalMessages((m) => m.map(msg => 
             msg.id === assistantMessageId 
@@ -463,7 +449,6 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
         }, 100);
       }
       
-      // Ensure conversations are refreshed to show the new conversation with title
       await refreshConvos();
       
       toast({ title: "Success", description: "Message sent successfully!" });
@@ -471,7 +456,6 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
       console.error("Send error:", e);
       toast({ title: "Error", description: e.message || "Error sending message", variant: "destructive" });
       
-      // Remove optimistic messages on error
       if (!conversationId && assistantMessageId) {
         setLocalMessages((m) => m.filter(msg => !msg.isOptimistic && msg.id !== assistantMessageId));
       }
@@ -500,7 +484,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
     setConversationId(conv.id);
     setPdfId(conv.document_id);
     setLocalMessages([]);
-    refreshMessages(); // Ensure messages are fetched for the selected conversation
+    refreshMessages();
   }
 
   async function deleteConversation(convId: string) {
@@ -509,7 +493,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
     try {
       const res = await fetch(`/api/conversations/${convId}`, {
         method: "DELETE",
-        credentials: "include", // Send httpOnly cookie
+        credentials: "include",
       });
       
       if (!res.ok) throw new Error("Failed to delete conversation");
@@ -540,7 +524,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
 
   if (!isInitialized || authLoading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center space-y-4">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
           <p className="text-muted-foreground">
@@ -553,7 +537,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center space-y-4 max-w-md">
           <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
             <MessageCircle className="w-8 h-8 text-primary" />
@@ -566,12 +550,12 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="flex h-screen max-h-screen overflow-hidden bg-gradient-to-br from-background via-background to-primary/5">
       {/* Sidebar */}
-      <div className={`transition-all duration-300 border-r border-border/50 bg-card/80 backdrop-blur-md ${
+      <div className={`transition-all duration-300 border-r border-border/50 bg-card/80 backdrop-blur-md flex flex-col ${
         sidebarCollapsed ? 'w-16' : 'w-96'
       }`}>
-        <div className="p-4 border-b border-border/50">
+        <div className="p-4 border-b border-border/50 flex-shrink-0">
           <div className="flex items-center justify-between">
             {!sidebarCollapsed && (
               <h2 className="font-semibold flex items-center gap-2">
@@ -591,9 +575,9 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
         </div>
 
         {!sidebarCollapsed && (
-          <div className="flex-1 overflow-hidden">
+          <>
             {/* Tab Navigation */}
-            <div className="p-4 border-b border-border/50">
+            <div className="p-4 border-b border-border/50 flex-shrink-0">
               <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
                 <Button
                   variant={activeTab === 'upload' ? 'default' : 'ghost'}
@@ -626,9 +610,9 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
             </div>
 
             {/* Tab Content */}
-            <div className="p-4 overflow-y-auto h-[calc(100%-120px)]">
+            <div className="flex-1 overflow-y-auto px-4 pb-4" style={{scrollbarColor: 'rgba(100, 100, 100, 0.5) transparent', scrollbarWidth: 'thin'}}>
               {activeTab === 'upload' && (
-                <AnimatedCard className="p-6 bg-gradient-to-br from-card to-card/50 border-primary/20">
+                <AnimatedCard className="p-6 mt-4 bg-gradient-to-br from-card to-card/50 border-primary/20">
                   <div className="text-center space-y-4">
                     <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center mx-auto">
                       <Upload className="w-6 h-6 text-white" />
@@ -645,16 +629,13 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
               )}
 
               {activeTab === 'documents' && (
-                <div className="space-y-3">
-                  {/* <div className="flex items-center justify-between">
-                    <h3 className="font-medium">Your Documents</h3>
-                  </div> */}
+                <div className="space-y-3 mt-4">
                   <DocumentsList onSelect={handleSelectDocument} />
                 </div>
               )}
 
               {activeTab === 'conversations' && (
-                <div className="space-y-3">
+                <div className="space-y-3 mt-4">
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium">Conversations</h3>
                     <Button
@@ -667,9 +648,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
                       New
                     </Button>
                   </div>
-                  <div className=" flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-300px)] px-2"
-                  style={{scrollbarColor: 'rgba(100, 100, 100, 0.5) transparent', scrollbarWidth: 'thin', scrollbarGutter: 'stable' }}
-                  >
+                  <div className="flex flex-col gap-2">
                     {!conversations ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full"></div>
@@ -685,7 +664,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
                           style={{ cursor: "pointer" }}
                         >
                           <AnimatedCard
-                            className={`p-3 transition-all hover:bg-purple-500/25 hover:border-purple-500 hover:shadow-sm  ${
+                            className={`p-3 transition-all hover:bg-purple-500/25 hover:border-purple-500 hover:shadow-sm ${
                               c.id === conversationId
                                 ? "bg-purple-500/40 border-purple-500 shadow-sm"
                                 : ""
@@ -721,14 +700,14 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
                 </div>
               )}
             </div>
-          </div>
+          </>
         )}
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <div className="p-2 border-b border-border/50 bg-card/30 backdrop-blur-md">
+        <div className="p-4 border-b border-border/50 bg-card/30 backdrop-blur-md flex-shrink-0">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="font-semibold text-lg bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
@@ -750,9 +729,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6"
-        style={{scrollbarColor: 'rgba(100, 100, 100, 0.5) transparent', scrollbarWidth: 'thin', scrollbarGutter: 'stable' }}
-        >
+        <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{scrollbarColor: 'rgba(100, 100, 100, 0.5) transparent', scrollbarWidth: 'thin'}}>
           {mergedMessages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-6 max-w-md">
@@ -805,7 +782,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
                         isStreaming={message.isStreaming || false}
                       />
                     ) : (
-                      <div className="text-sm leading-relaxed ">
+                      <div className="text-sm leading-relaxed">
                         {message.content}
                       </div>
                     )}
@@ -843,7 +820,7 @@ export function ChatUI({ initialPdfId }: { initialPdfId?: string }) {
         </div>
 
         {/* Input Area */}
-        <div className="px-4 pt-4 border-t border-border/50 bg-card/30 backdrop-blur-md ">
+        <div className="p-4 border-t border-border/50 bg-card/30 backdrop-blur-md flex-shrink-0">
           <div className="flex items-end gap-4 max-w-4xl mx-auto">
             <div className="flex-1 relative">
               <Textarea
