@@ -184,3 +184,33 @@ export interface DeleteDocumentResponse {
 export interface ErrorResponse {
   detail: string;
 }
+
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  new_password: string;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface PasswordResetResponse {
+  message: string;
+  success: boolean;
+}
+
+export interface UserResponse {
+  id: string;
+  username: string;
+  email: string;
+}
+
+export interface ErrorResponse {
+  detail: string;
+}

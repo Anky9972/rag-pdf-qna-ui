@@ -17,7 +17,7 @@ export default function ChatPage() {
   if (!user) return null;
   const pdf = search.get("pdf") || undefined
   return (
-    <main className="container mx-auto px-4 py-4 ">
+    <main className="container mx-auto px- py-2 ">
       <ChatUI initialPdfId={pdf} />
     </main>
   )
